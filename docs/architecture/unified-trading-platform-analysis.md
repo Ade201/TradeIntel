@@ -913,7 +913,8 @@ erDiagram
 
 ### Funds Movement
 
-- `deposits`: `id`, `user_id`, `asset_id`, `network_id`, `wallet_id`, `tx_hash`, `amount`, `confirmations`, `status`, `risk_status`, `credited_at`.
+- `deposits`: `id`, `user_id`, `asset_id`, `network_id`, `wallet_id`, `tx_hash`, `chain_event_key`, `amount`, `confirmations`, `status`, `risk_status`, `credited_at`.
+  - `chain_event_key` is required and normalizes the chain-specific credit source into a non-null string: UTXO chains use `vout:<output_index>`, EVM/token transfers use `log:<log_index>`, and account/native transfers use `trace:<trace_address>` or `native:0:<to_address>` when no trace index exists.
 - `withdrawals`: `id`, `user_id`, `asset_id`, `network_id`, `address`, `tag`, `amount`, `fee`, `status`, `risk_status`, `approval_status`, `tx_hash`, `broadcast_at`.
 - `withdrawal_approvals`: multi-step approvals with actor, policy, decision, reason.
 - `custody_transactions`: signer/MPC/HSM references and reconciliation state.
@@ -935,7 +936,8 @@ erDiagram
 - `orders(market_id, status, side, price, created_at)` optimized per matching queries; partial indexes for open orders.
 - `trades(market_id, created_at desc)` and time partitioning for history.
 - `ledger_entries(account_id, created_at)`, `ledger_transactions(idempotency_key unique)`.
-- `deposits(network_id, tx_hash, output_index)` unique idempotency index.
+- `deposits(network_id, tx_hash, chain_event_key)` unique idempotency index; `chain_event_key` must be `NOT NULL` so account-based deposits remain idempotent during indexer retries and reorg replay.
+- If a legacy schema keeps nullable `output_index`, add expression/partial unique indexes instead of relying on nullable uniqueness, for example `unique(network_id, tx_hash, coalesce(output_index::text, chain_event_key))` with `chain_event_key NOT NULL` for account-based chains.
 - `withdrawals(user_id, status, created_at)` and `withdrawals(status, risk_status)` operational indexes.
 - GIN indexes on JSONB policy metadata only where query patterns prove value.
 - Partition `audit_logs`, `trades`, `order_events`, `ledger_entries`, `notifications`, and `candles` by time.
